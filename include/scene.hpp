@@ -2,6 +2,8 @@
 #define SCENE_HPP
 #include <entt/entt.hpp>
 #include "model.hpp"
+#include "skinned_model.hpp"
+#include "animator.hpp"
 #include "shader.hpp"
 #include "input.hpp"
 #include <unordered_map>
@@ -18,7 +20,8 @@ struct LightData
 
 struct GameResource
 {
-	std::vector<roj::model_t> models;
+	std::vector<std::vector<roj::Mesh>> models;
+	std::vector<roj::SkinnedModel> skinnedModels;
 	std::unordered_map<std::string, roj::GLShaderObject> shaderObjects;
 	std::unordered_map<std::string, uint32_t> textures;
 };

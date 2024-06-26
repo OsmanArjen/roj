@@ -5,18 +5,23 @@ namespace mainscene
 
 	void init(roj::Scene& scene, GameResource& resources)
 	{
-		roj::ModelLoader modelLoader;
+		roj::ModelLoader<roj::SkinnedMesh> modelLoader;
 		modelLoader.load("res/assets/models/viewmodel/scene.gltf");
-		resources.models.emplace_back(std::move(modelLoader.get()));
+		resources.skinnedModels.emplace_back(std::move(modelLoader.get()));
+		roj::Animator animator(resources.skinnedModels[0]);
+
+		for (auto& name : animator.get()) { std::cout << name << '\n'; }
+		animator.set("allanims");
 		resources.shaderObjects["basic"].link("res/shaders/vs_basic.glsl", "res/shaders/fs_basic.glsl");
 		scene.camera = { glm::vec3(0.0) };
-
+		scene.entities.emplace<roj::Animator>(scene.entities.create(), animator);
 		//TODO init an entity and render
 	}
 
 	void update(roj::Scene& scene)
 	{
-
+		auto view = scene.entities.view<roj::Animator>();
+		std::get<0>(view.get(entt::entity(0))).update(scene.deltatime);
 	}
 
 	void render(roj::Scene& scene, GameResource& resources)

@@ -36,6 +36,7 @@ void AppHandle::initWindow()
 AppHandle::AppHandle()
 {
     initWindow();
+    
     uint32_t mainScene = m_world.addScene({
         .init   = mainscene::init,
         .render = mainscene::render,
@@ -43,8 +44,9 @@ AppHandle::AppHandle()
         .keyCallback    = mainscene::keyCallback,
         .mouseCallback  = mainscene::mouseCallback,
         .cursorCallback = mainscene::cursorCallback});
-
+    
     m_world.setActiveScene(mainScene);
+    m_world.init();
 }
 
 void AppHandle::update()

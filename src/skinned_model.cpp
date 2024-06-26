@@ -5,7 +5,7 @@
 using namespace utils::assimp;
 static void extractBoneData(std::vector<roj::SkinnedMesh::Vertex>& vertices, aiMesh* mesh, roj::SkinnedModel& model)
 {
-    for (int i = 0; i < mesh->mNumBones; ++i)
+    for (unsigned int i = 0; i < mesh->mNumBones; ++i)
     {
         int boneId = -1;
         std::string boneName = mesh->mBones[i]->mName.C_Str();
@@ -35,29 +35,28 @@ static void extractBoneData(std::vector<roj::SkinnedMesh::Vertex>& vertices, aiM
         }
     }
 }
-static void extractBoneNode(roj::BoneNode& bone, aiNode* src, std::unordered_map<std::string, roj::BoneInfo>& boneInfoMap)
+static void extractBoneNode(roj::BoneNode& bone, aiNode* src)
 {
     bone.name = src->mName.data;
-    bone.info = boneInfoMap[bone.name];
-    for (int i = 0; i < src->mNumChildren; i++)
+    for (unsigned int i = 0; i < src->mNumChildren; i++)
     {
         roj::BoneNode node;
-        extractBoneNode(node, src->mChildren[i], boneInfoMap);
+        extractBoneNode(node, src->mChildren[i]);
         bone.children.push_back(node);
     }
 }
 
 static void extractAnimations(const aiScene* scene, roj::SkinnedModel& model)
 {
-    for (size_t i = 0; i < scene->mNumAnimations; i++)
+    for (unsigned int i = 0; i < scene->mNumAnimations; i++)
     {
         aiAnimation* sceneAnim = scene->mAnimations[i];
         roj::Animation& animation = model.animations[sceneAnim->mName.C_Str()];
-        extractBoneNode(animation.rootBone, scene->mRootNode, model.boneInfoMap);
+        extractBoneNode(animation.rootBone, scene->mRootNode);
         animation.ticksPerSec = (sceneAnim->mTicksPerSecond != 0.0f) ? sceneAnim->mTicksPerSecond : 1.0f;
         animation.duration = sceneAnim->mDuration * sceneAnim->mTicksPerSecond;
 
-        for (int i = 0; i < sceneAnim->mNumChannels; i++) {
+        for (unsigned int i = 0; i < sceneAnim->mNumChannels; i++) {
             aiNodeAnim* channel = sceneAnim->mChannels[i];
             roj::BoneTransform& track = animation.boneTransforms[channel->mNodeName.C_Str()];
             for (int j = 0; j < channel->mNumPositionKeys; j++) {
@@ -80,7 +79,8 @@ static void extractAnimations(const aiScene* scene, roj::SkinnedModel& model)
 
 namespace roj
 {
-template class ModelLoader<SkinnedMesh, SkinnedModel>;
+    
+template class ModelLoader<SkinnedMesh>;
 
 void SkinnedMesh::setup()
     {
@@ -126,7 +126,8 @@ void SkinnedModel::clear()
 std::vector<SkinnedMesh>::iterator SkinnedModel::begin() { return meshes.begin(); }
 std::vector<SkinnedMesh>::iterator SkinnedModel::end() { return meshes.end(); }
 
-bool ModelLoader<SkinnedMesh, SkinnedModel>::load(const std::string& path)
+template<>
+bool ModelLoader<SkinnedMesh>::load(const std::string& path)
 {
     resetLoader();
     const aiScene* scene = m_import.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
@@ -147,8 +148,8 @@ bool ModelLoader<SkinnedMesh, SkinnedModel>::load(const std::string& path)
     extractAnimations(scene, m_model);
     return true;
 }
-
-void ModelLoader<SkinnedMesh, SkinnedModel>::processNode(aiNode* node, const aiScene* scene)
+template<>
+void ModelLoader<SkinnedMesh>::processNode(aiNode* node, const aiScene* scene)
 {
     for (uint32_t i = 0; i < node->mNumMeshes; i++)
     {
@@ -160,8 +161,8 @@ void ModelLoader<SkinnedMesh, SkinnedModel>::processNode(aiNode* node, const aiS
         processNode(node->mChildren[i], scene);
     }
 }
-
-SkinnedMesh ModelLoader<SkinnedMesh, SkinnedModel>::processMesh(aiMesh* mesh, const aiScene* scene)
+template<>
+SkinnedMesh ModelLoader<SkinnedMesh>::processMesh(aiMesh* mesh, const aiScene* scene)
 {
     std::vector<MeshTexture> textures = getMeshTextures(scene->mMaterials[mesh->mMaterialIndex]);
     std::vector<SkinnedMesh::Vertex> vertices = getMeshVertices(mesh);
@@ -174,8 +175,8 @@ SkinnedMesh ModelLoader<SkinnedMesh, SkinnedModel>::processMesh(aiMesh* mesh, co
     extractBoneData(vertices, mesh, m_model);
     return SkinnedMesh{ vertices, indices, textures };
 }
-
-std::vector<SkinnedMesh::Vertex> ModelLoader<SkinnedMesh, SkinnedModel>::getMeshVertices(aiMesh* mesh)
+template<>
+std::vector<SkinnedMesh::Vertex> ModelLoader<SkinnedMesh>::getMeshVertices(aiMesh* mesh)
 {
     std::vector<SkinnedMesh::Vertex> vertices;
     for (uint32_t i = 0; i < mesh->mNumVertices; i++)

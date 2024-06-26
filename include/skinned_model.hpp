@@ -7,6 +7,7 @@
 
 namespace roj
 {
+	
 	struct SkinnedMesh
 	{
 		struct Vertex
@@ -27,15 +28,10 @@ namespace roj
 		void setup();
 	};
 
-	struct BoneInfo
-	{
-		int id;
-		glm::mat4 offset;
-	};
+
 
 	struct BoneNode
 	{
-		BoneInfo info;
 		std::string name;
 		std::vector<BoneNode> children;
 	};
@@ -58,7 +54,11 @@ namespace roj
 	};
 
 
-
+	struct BoneInfo
+	{
+		int id;
+		glm::mat4 offset;
+	};
 	struct SkinnedModel
 	{
 		int boneCount{ 0 };
@@ -69,6 +69,7 @@ namespace roj
 		std::vector<SkinnedMesh>::iterator end();
 		void clear();
 	};
+
 
 }
 #endif //-SKINNED_MODEL_HPP

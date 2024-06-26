@@ -2,6 +2,7 @@
 #include <filesystem>
 namespace roj
 {
+
 template class ModelLoader<Mesh>;
 
 void Mesh::setup()
@@ -36,73 +37,7 @@ void Mesh::setup()
     glBindVertexArray(0);
 }
 
-
-
-template<typename mesh_t, typename model_t>
-model_t& ModelLoader<mesh_t, model_t>::get()
-{
-    return m_model;
-}
-
-template<typename mesh_t, typename model_t>
-const std::string& ModelLoader<mesh_t, model_t>::getInfoLog()
-{
-    return m_infoLog;
-}
-
-template<typename mesh_t, typename model_t>
-std::vector<MeshTexture> ModelLoader<mesh_t, model_t>::getMeshTextures(aiMaterial* material)
-{
-    std::vector<MeshTexture> textures;
-    std::vector<MeshTexture> diffuseMaps = loadTextureMap(material, aiTextureType_DIFFUSE);
-    textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
-    std::vector<MeshTexture> specularMaps = loadTextureMap(material, aiTextureType_SPECULAR);
-    textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
-    std::vector<MeshTexture> normalMaps = loadTextureMap(material, aiTextureType_NORMALS);
-    textures.insert(textures.end(), normalMaps.begin(), normalMaps.end());
-    std::vector<MeshTexture> heightMaps = loadTextureMap(material, aiTextureType_HEIGHT);
-    textures.insert(textures.end(), heightMaps.begin(), heightMaps.end());
-    return textures;
-}
-
-template<typename mesh_t, typename model_t>
-std::vector<MeshTexture> ModelLoader<mesh_t, model_t>::loadTextureMap(aiMaterial* mat, aiTextureType type)
-{
-    std::vector<MeshTexture> textures;
-    for (uint32_t i = 0; i < mat->GetTextureCount(type); i++)
-    {
-        aiString texSrc;
-        mat->GetTexture(type, i, &texSrc);
-        bool cached = false;
-        for (uint32_t j = 0; !cached && (j < m_texCache.size()); j++)
-        {
-            if (std::strcmp(m_texCache[j].src.data(), texSrc.C_Str()) == 0)
-            {
-                textures.push_back(m_texCache[j]);
-                cached = true;
-            }
-        }
-
-        if (!cached)
-        {
-            std::string texPath = (std::filesystem::path(m_relativeDir) / texSrc.C_Str()).string();
-            m_texCache.emplace_back(utils::loadGLTexture(texPath), type, texSrc.C_Str());
-        }
-    }
-
-    return textures;
-}
-
-template<typename mesh_t, typename model_t>
-void ModelLoader<mesh_t, model_t>::resetLoader()
-{
-    m_texCache.clear();
-    m_model.clear();
-    m_infoLog.clear();
-    m_relativeDir.clear();
-}
-
-
+template<>
 bool ModelLoader<Mesh>::load(const std::string& path)
 {
     resetLoader();
@@ -122,7 +57,7 @@ bool ModelLoader<Mesh>::load(const std::string& path)
     }
     return true;
 }
-
+template<>
 void ModelLoader<Mesh>::processNode(aiNode* node, const aiScene* scene)
 {
     for (uint32_t i = 0; i < node->mNumMeshes; i++)
@@ -136,7 +71,7 @@ void ModelLoader<Mesh>::processNode(aiNode* node, const aiScene* scene)
         processNode(node->mChildren[i], scene);
     }
 }
-
+template<>
 Mesh ModelLoader<Mesh>::processMesh(aiMesh* mesh, const aiScene* scene)
 {
     std::vector<MeshTexture> textures = getMeshTextures(scene->mMaterials[mesh->mMaterialIndex]);
@@ -149,7 +84,7 @@ Mesh ModelLoader<Mesh>::processMesh(aiMesh* mesh, const aiScene* scene)
     }
     return Mesh{ vertices, indices, textures };
 }
-
+template<>
 std::vector<Mesh::Vertex> ModelLoader<Mesh>::getMeshVertices(aiMesh* mesh)
 {
     std::vector<Mesh::Vertex> vertices;

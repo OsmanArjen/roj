@@ -1,72 +1,27 @@
-#include <vector>
-#include <glm/glm.hpp>
-class Animation;
+#ifndef ANIMATOR_HPP
+#define ANIMATOR_HPP
+#include "skinned_model.hpp"
+namespace roj
+{
 class Animator
 {
-public:
-    Animator(Animation* anim)
-    {
-        m_CurrentTime = 0.0;
-        m_CurrentAnimation = anim;
-
-        m_boneMatrices.reserve(100);
-
-        for (int i = 0; i < 100; i++)
-            m_boneMatrices.push_back(glm::mat4(1.0f));
-    }
-
-    void UpdateAnimation(float dt)
-    {
-        m_DeltaTime = dt;
-        if (m_CurrentAnimation)
-        {
-            m_CurrentTime += m_CurrentAnimation->GetTicksPerSecond() * dt;
-            m_CurrentTime = fmod(m_CurrentTime, m_CurrentAnimation->GetDuration());
-            CalculateBoneTransform(&m_CurrentAnimation->GetRootNode(), glm::mat4(1.0f));
-        }
-    }
-
-    void PlayAnimation(Animation* pAnimation)
-    {
-        m_CurrentAnimation = pAnimation;
-        m_CurrentTime = 0.0f;
-    }
-
-    void CalculateBoneTransform(const AssimpNodeData* node, glm::mat4 parentTransform)
-    {
-        std::string nodeName = node->name;
-        glm::mat4 nodeTransform = node->transformation;
-
-        Bone* Bone = m_CurrentAnimation->FindBone(nodeName);
-
-        if (Bone)
-        {
-            Bone->Update(m_CurrentTime);
-            nodeTransform = Bone->GetLocalTransform();
-        }
-
-        glm::mat4 globalTransformation = parentTransform * nodeTransform;
-
-        auto boneInfoMap = m_CurrentAnimation->GetBoneIDMap();
-        if (boneInfoMap.find(nodeName) != boneInfoMap.end())
-        {
-            int index = boneInfoMap[nodeName].id;
-            glm::mat4 offset = boneInfoMap[nodeName].offset;
-            m_FinalBoneMatrices[index] = globalTransformation * offset;
-        }
-
-        for (int i = 0; i < node->childrenCount; i++)
-            CalculateBoneTransform(&node->children[i], globalTransformation);
-    }
-
-    std::vector<glm::mat4> GetFinalBoneMatrices()
-    {
-        return m_FinalBoneMatrices;
-    }
-
 private:
-    std::vector<glm::mat4> m_FinalBoneMatrices;
-    Animation* m_CurrentAnimation;
-    float m_CurrentTime;
-    float m_DeltaTime;
+    std::vector<glm::mat4> m_boneMatrices;
+    Animation* m_currAnim{nullptr};
+    SkinnedModel* m_model;
+    float m_currTime{0.0f};
+private:
+    int getKeyTransformIdx(float animTime, std::vector<float>& timestamps);
+    float getScaleFactor(float lastTimeStamp, float nextTimeStamp, float animationTime);
+    glm::mat4 interpolatePosition(float animTime, BoneTransform& boneTransform);
+    glm::mat4 interpolateRotation(float animTime, BoneTransform& boneTransform);
+    glm::mat4 interpolateScaling(float animTime, BoneTransform& boneTransform);
+    void calcBoneTransform(BoneNode& node, glm::mat4 offset);
+public:
+	Animator(SkinnedModel& model);
+    void set(const std::string& name);
+    std::vector<std::string> get();
+    void update(float dt);
 };
+}
+#endif //-ANIMATOR_HPP

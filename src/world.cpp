@@ -15,7 +15,7 @@ void GameWorld::update(float deltatime)
 
 void GameWorld::render()
 {
-	//...
+	m_scenes[m_activeScene].binds.render(m_scenes[m_activeScene], m_resources);
 }
 
 uint32_t GameWorld::addScene(roj::SceneBinds bindings)

@@ -2,85 +2,94 @@
 
 
 
-int roj::Animator::getKeyTransformIdx(float animTime, std::vector<float>& timestamps)
+int roj::Animator::getKeyTransformIdx(std::vector<float>& timestamps)
 {
-    for (int index = 0; index < timestamps.size() - 1; ++index)
+    if (timestamps.size() < 2)
+        return -1;
+    
+    for (int index = 0; index < timestamps.size() - 2; ++index)
     {
-        if (animTime < timestamps[index + 1])
+        if (m_currTime < timestamps[index + 1])
             return index;
     }
-
-    return static_cast<int>(timestamps.size() - 1);
+    
 }
 
 float roj::Animator::getScaleFactor(float lastTimeStamp, float nextTimeStamp, float animationTime)
 {
     float scaleFactor = 0.0f;
-    float midWayLength = animationTime - lastTimeStamp;
+    float midWayLength = m_currTime - lastTimeStamp;
     float framesDiff = nextTimeStamp - lastTimeStamp;
     scaleFactor = midWayLength / framesDiff;
     return scaleFactor;
 }
 
-glm::mat4 roj::Animator::interpolatePosition(float animTime, roj::BoneTransform& boneTransform)
+glm::mat4 roj::Animator::interpolatePosition(roj::BoneTransform& boneTransform)
 {
-    if (boneTransform.positions.size() == 1)
+    int posIdx = getKeyTransformIdx(boneTransform.positionTimestamps);
+    if (posIdx == -1)
         return glm::translate(glm::mat4(1.0f), boneTransform.positions[0]);
 
-    int p0Index = getKeyTransformIdx(animTime, boneTransform.positionTimestamps);
-    int p1Index = p0Index + 1;
-    float scaleFactor = getScaleFactor(boneTransform.positionTimestamps[p0Index],
-        boneTransform.positionTimestamps[p1Index], animTime);
-    glm::vec3 finalPosition = glm::mix(boneTransform.positions[p0Index],
-        boneTransform.positions[p1Index], scaleFactor);
+    float scaleFactor = getScaleFactor(boneTransform.positionTimestamps[posIdx],
+        boneTransform.positionTimestamps[posIdx + 1], m_currTime);
+    glm::vec3 finalPosition = glm::mix(boneTransform.positions[posIdx],
+        boneTransform.positions[posIdx+1], scaleFactor);
     return glm::translate(glm::mat4(1.0f), finalPosition);
+
 }
-glm::mat4 roj::Animator::interpolateRotation(float animTime, roj::BoneTransform& boneTransform)
+
+glm::mat4 roj::Animator::interpolateRotation(roj::BoneTransform& boneTransform)
 {
-    if (boneTransform.rotations.size() == 1)
+    int posIdx = getKeyTransformIdx(boneTransform.rotationTimestamps);
+    if (posIdx == -1)
         return glm::toMat4(glm::normalize(boneTransform.rotations[0]));
-        
-    int p0Index = getKeyTransformIdx(animTime, boneTransform.rotationTimestamps);
-    int p1Index = p0Index + 1;
-    float scaleFactor = getScaleFactor(boneTransform.rotationTimestamps[p0Index],boneTransform.rotationTimestamps[p1Index], animTime);
-    glm::quat finalRotation = glm::slerp(boneTransform.rotations[p0Index],boneTransform.rotations[p1Index], scaleFactor);
-    finalRotation = glm::normalize(finalRotation);
-    return glm::toMat4(finalRotation);
+
+    
+    float scaleFactor = getScaleFactor(boneTransform.rotationTimestamps[posIdx],
+        boneTransform.rotationTimestamps[posIdx + 1], m_currTime);
+
+    glm::quat finalRotation = glm::slerp(boneTransform.rotations[posIdx],
+        boneTransform.rotations[posIdx + 1], scaleFactor);
+
+    return glm::toMat4(glm::normalize(finalRotation));
 }
-glm::mat4 roj::Animator::interpolateScaling(float animTime, roj::BoneTransform& boneTransform)
+
+glm::mat4 roj::Animator::interpolateScaling( roj::BoneTransform& boneTransform)
 {
-    if (boneTransform.scales.size() == 1)
+
+    int posIdx = getKeyTransformIdx(boneTransform.scaleTimestamps);
+    if (posIdx == -1)
         return glm::scale(glm::mat4(1.0f), boneTransform.scales[0]);
-    int p0Index = getKeyTransformIdx(animTime, boneTransform.scaleTimestamps);
-    int p1Index = p0Index + 1;
-    float scaleFactor = getScaleFactor(boneTransform.scaleTimestamps[p0Index], boneTransform.scaleTimestamps[p1Index], animTime);
-    glm::vec3 finalScale = glm::mix(boneTransform.scales[p0Index], boneTransform.scales[p1Index], scaleFactor);
+    float scaleFactor = getScaleFactor(boneTransform.scaleTimestamps[posIdx],
+        boneTransform.scaleTimestamps[posIdx + 1], m_currTime);
+    glm::vec3 finalScale = glm::mix(boneTransform.scales[posIdx], boneTransform.scales[posIdx+1], scaleFactor);
     return glm::scale(glm::mat4(1.0f), finalScale);
 }
 
 void roj::Animator::calcBoneTransform(BoneNode& node, glm::mat4 offset)
 {
-    roj::BoneTransform& boneTransform = m_currAnim->boneTransforms[node.name];
-    glm::mat4 translation = interpolatePosition(m_currTime, boneTransform);
-    glm::mat4 rotation = interpolateRotation(m_currTime, boneTransform);
-    glm::mat4 scale = interpolateScaling(m_currTime, boneTransform);
-    glm::mat4 globalTransformation = offset * translation * rotation * scale;
-
     auto& boneInfoMap = m_model->boneInfoMap;
-    if (boneInfoMap.find(node.name) != boneInfoMap.end())
+    if (m_currAnim->boneTransforms.find(node.name) != m_currAnim->boneTransforms.end())
     {
-        m_boneMatrices[boneInfoMap[node.name].id] = globalTransformation * boneInfoMap[node.name].offset;
+        roj::BoneTransform& boneTransform = m_currAnim->boneTransforms.at(node.name);
+        glm::mat4 translation = interpolatePosition(boneTransform);
+        glm::mat4 rotation = interpolateRotation(boneTransform);
+        glm::mat4 scale = interpolateScaling(boneTransform);
+        offset *= translation * rotation * scale;
+        m_boneMatrices[boneInfoMap[node.name].id] = offset * boneInfoMap[node.name].offset;
     }
 
     for (roj::BoneNode& child : node.children)
     {
-        calcBoneTransform(child, globalTransformation);
+        calcBoneTransform(child, offset);
     }
+    
 }
 
 roj::Animator::Animator(SkinnedModel& model)
     : m_model(&model)
 {
+    m_boneMatrices.resize(model.boneInfoMap.size());
 }
 
 void roj::Animator::set(const std::string& name)
@@ -101,6 +110,11 @@ std::vector<std::string> roj::Animator::get()
     }
 
     return animNames;
+}
+
+std::vector<glm::mat4>& roj::Animator::getBoneMatrices()
+{
+    return m_boneMatrices;
 }
 
 void roj::Animator::update(float dt)

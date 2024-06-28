@@ -54,11 +54,12 @@ static void extractAnimations(const aiScene* scene, roj::SkinnedModel& model)
         roj::Animation& animation = model.animations[sceneAnim->mName.C_Str()];
         extractBoneNode(animation.rootBone, scene->mRootNode);
         animation.ticksPerSec = (sceneAnim->mTicksPerSecond != 0.0f) ? sceneAnim->mTicksPerSecond : 1.0f;
-        animation.duration = sceneAnim->mDuration * sceneAnim->mTicksPerSecond;
+        animation.duration = sceneAnim->mDuration;
 
         for (unsigned int i = 0; i < sceneAnim->mNumChannels; i++) {
             aiNodeAnim* channel = sceneAnim->mChannels[i];
             roj::BoneTransform& track = animation.boneTransforms[channel->mNodeName.C_Str()];
+            
             for (int j = 0; j < channel->mNumPositionKeys; j++) {
                 track.positionTimestamps.emplace_back(channel->mPositionKeys[j].mTime);
                 track.positions.push_back(toGlmVec3(channel->mPositionKeys[j].mValue));

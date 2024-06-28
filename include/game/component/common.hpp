@@ -7,8 +7,8 @@ namespace game
 {
 	struct Transform
 	{
-		glm::vec3 position;
-		float scale;
+		glm::vec3 position{0.f, 0.f, 0.f};
+		float scale = 1.f;
 	};
 
 	struct Renderable

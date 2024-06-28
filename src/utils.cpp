@@ -45,6 +45,7 @@ namespace utils
 
     unsigned int loadGLTexture(const std::string& path)
     {
+        stbi_set_flip_vertically_on_load(1);
         unsigned int texId;
         glGenTextures(1, &texId);
 

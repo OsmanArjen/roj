@@ -23,12 +23,12 @@ static void extractBoneData(std::vector<roj::SkinnedMesh::Vertex>& vertices, aiM
         for (int j = 0; j < mesh->mBones[i]->mNumWeights; ++j)
         {
             auto& vertex = vertices[weights[j].mVertexId];
-            for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
+            for (int k = 0; k < MAX_BONE_INFLUENCE; ++k)
             {
-                if (vertex.boneIds[i] == -1)
+                if (vertex.weights[k] == 0.0f)
                 {
-                    vertex.weights[i] = weights[j].mWeight;
-                    vertex.boneIds[i] = boneId;
+                    vertex.weights[k] = weights[j].mWeight;
+                    vertex.boneIds[k] = boneId;
                     break;
                 }
             }
@@ -38,6 +38,7 @@ static void extractBoneData(std::vector<roj::SkinnedMesh::Vertex>& vertices, aiM
 static void extractBoneNode(roj::BoneNode& bone, aiNode* src)
 {
     bone.name = src->mName.data;
+    bone.transform = toGlmMat4(src->mTransformation);
     for (unsigned int i = 0; i < src->mNumChildren; i++)
     {
         roj::BoneNode node;
@@ -196,7 +197,7 @@ std::vector<SkinnedMesh::Vertex> ModelLoader<SkinnedMesh>::getMeshVertices(aiMes
         }
         else
             vertex.texCoords = glm::vec2(0.0f, 0.0f);
-        std::fill(vertex.boneIds, vertex.boneIds + MAX_BONE_INFLUENCE, -1);
+        std::fill(vertex.boneIds, vertex.boneIds + MAX_BONE_INFLUENCE, 0);
         std::fill(vertex.weights, vertex.weights + MAX_BONE_INFLUENCE, 0.0f);
         vertices.push_back(vertex);
     }

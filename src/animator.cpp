@@ -68,22 +68,28 @@ glm::mat4 roj::Animator::interpolateScaling( roj::BoneTransform& boneTransform)
 
 void roj::Animator::calcBoneTransform(BoneNode& node, glm::mat4 offset)
 {
-    auto& boneInfoMap = m_model->boneInfoMap;
-    if (m_currAnim->boneTransforms.find(node.name) != m_currAnim->boneTransforms.end())
+    if (auto it = m_currAnim->boneTransforms.find(node.name); it != m_currAnim->boneTransforms.end())
     {
-        roj::BoneTransform& boneTransform = m_currAnim->boneTransforms.at(node.name);
+        auto& boneTransform = it->second;
         glm::mat4 translation = interpolatePosition(boneTransform);
         glm::mat4 rotation = interpolateRotation(boneTransform);
         glm::mat4 scale = interpolateScaling(boneTransform);
         offset *= translation * rotation * scale;
-        m_boneMatrices[boneInfoMap[node.name].id] = offset * boneInfoMap[node.name].offset;
+    }
+    else {
+        offset *= node.transform;
+    }
+
+    if (auto it = m_model->boneInfoMap.find(node.name); it != m_model->boneInfoMap.end())
+    {
+        auto& boneInfo = it->second;
+        m_boneMatrices[boneInfo.id] = offset * boneInfo.offset;
     }
 
     for (roj::BoneNode& child : node.children)
     {
         calcBoneTransform(child, offset);
     }
-    
 }
 
 roj::Animator::Animator(SkinnedModel& model)

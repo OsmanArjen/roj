@@ -7,17 +7,17 @@ namespace mainscene
 	{
 		roj::ModelLoader<roj::SkinnedMesh> modelLoader;
 		
-		modelLoader.load("res/assets/models/viewmodel/scene.gltf");
+		modelLoader.load("res/assets/models/viewmodel/untitled.glb");
 		resources.skinnedModels.emplace_back(std::move(modelLoader.get()));
-		roj::Animator animator{ resources.skinnedModels[0] };
-		animator.set("allanims");
 		resources.shaderObjects["basic"].link("res/shaders/vs_basic.glsl", "res/shaders/fs_basic.glsl");
 		
 		auto entity = scene.entities.create();
-		scene.entities.emplace<game::Transform>(entity, game::Transform{});
-		scene.entities.emplace<game::Renderable>(entity, game::Renderable{ uint32_t(resources.skinnedModels.size()-1), "basic"});
-		scene.entities.emplace<roj::Animator>(entity, animator);
-		scene.camera = { glm::vec3(0.0) };
+
+		scene.entities.emplace<game::Transform>(entity);
+		scene.entities.emplace<game::Renderable>(entity, (uint32_t)resources.skinnedModels.size()-1, "basic");
+		scene.entities.emplace<roj::Animator>(entity, resources.skinnedModels[0]).set("Action.001");
+
+		scene.camera = { { -235.0f, 244.0f, 181.0f }, {0.0f, 1.0f, 0.0f}, -34.1f, -27.1f };
 	}
 
 	void update(roj::Scene& scene)
@@ -45,7 +45,7 @@ namespace mainscene
 			shader.uniform3f("viewPos", viewPos);
 			shader.uniformMat4("view", viewMatrix);
 			shader.uniformMat4("model", glm::scale(modelMatrix, glm::vec3(transform.scale)));
-			shader.uniformMat4("projection", glm::perspective(glm::radians(45.f), (float)1280 / (float)720, 0.1f, 100.0f));
+			shader.uniformMat4("projection", glm::perspective(glm::radians(45.f), (float)1280 / (float)720, 0.1f, 1000.0f));
 			auto transforms = animator.getBoneMatrices();
 			for (int i = 0; i < transforms.size(); ++i)
 				shader.uniformMat4("finalBonesMatrices[" + std::to_string(i) + "]", transforms[i]);
@@ -81,8 +81,8 @@ namespace mainscene
 
 	void cursorCallback(roj::Scene& scene, float xpos_p, float ypos_p)
 	{
-		static float lastX = 0.0f;
-		static float lastY = 0.0f;
+		static float lastX = xpos_p;
+		static float lastY = ypos_p;
 
 		float xoffset = xpos_p - lastX;
 		float yoffset = lastY - ypos_p; // reversed since y-coordinates go from bottom to top

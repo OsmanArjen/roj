@@ -33,6 +33,7 @@ namespace roj
 	struct BoneNode
 	{
 		std::string name;
+		glm::mat4 transform;
 		std::vector<BoneNode> children;
 	};
 

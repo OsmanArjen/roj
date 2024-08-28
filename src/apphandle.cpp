@@ -1,5 +1,6 @@
 #include "apphandle.hpp"
-
+#include "game/scenes/main_scene.hpp"
+AppHandle* AppHandle::s_instance = nullptr;
 void AppHandle::initWindow()
 {
     glfwInit();
@@ -32,21 +33,27 @@ void AppHandle::initWindow()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(m_window, true);
+    ImGui_ImplOpenGL3_Init("#version 330 core");
 }
+
 AppHandle::AppHandle()
 {
+    assert(!s_instance && "Application already exists!");
+    AppHandle::s_instance = this;
+
     initWindow();
-    
-    uint32_t mainScene = m_world.addScene({
-        .init   = mainscene::init,
-        .render = mainscene::render,
-        .update = mainscene::update,
-        .keyCallback    = mainscene::keyCallback,
-        .mouseCallback  = mainscene::mouseCallback,
-        .cursorCallback = mainscene::cursorCallback});
-    
+    uint32_t mainScene = m_world.addScene<MainScene>(roj::SceneFlags::PHYSX_FLAG);
     m_world.setActiveScene(mainScene);
-    m_world.init();
+    lastFrame = static_cast<float>(glfwGetTime());
 }
 
 void AppHandle::update()
@@ -60,9 +67,10 @@ void AppHandle::update()
 
     m_world.update(deltaTime);
 }
+
 void AppHandle::render()
 {
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     m_world.render();
 }
@@ -76,6 +84,5 @@ void AppHandle::loop()
         glfwSwapBuffers(m_window);
         glfwPollEvents();
     }
-
     glfwTerminate();
 }

@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <vector>
 #include <glad/glad.h>    
 #include <stb_image.h>
 #include <glm/glm.hpp>
@@ -26,6 +27,9 @@ namespace utils
 	}
 
 	unsigned int loadGLTexture(const std::string& path);
+	unsigned int loadGLCubeMap(const std::vector<std::string>& faces);
+
+	glm::uvec2 getWindowSize();
 }
 
 #endif //-UTILS_HPP

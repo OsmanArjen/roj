@@ -11,11 +11,12 @@
 #include <array>
 
 #include "world.hpp"
-#include "game/scenes/main_scene.hpp"
 
+class GameWorld;
 class AppHandle
 {
 private:
+	static AppHandle* s_instance;
 	GLFWwindow* m_window;
 	GameWorld   m_world;
 	float deltaTime = 0.0f;
@@ -26,6 +27,8 @@ private:
 	void render();
 public:
 	AppHandle();
+	static AppHandle* get() { return s_instance; }
+	GLFWwindow* getWindow() { return m_window; }
 	void loop();
 };
 #endif // APPHANDLE_HPP

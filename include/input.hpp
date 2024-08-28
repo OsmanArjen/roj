@@ -2,8 +2,6 @@
 #define INPUT_HPP
 namespace roj
 {
-
-
 	enum InputAction
 	{
 		Release = 0,
@@ -155,7 +153,10 @@ namespace roj
 		RightSuper = 347,
 		Menu = 348
 	};
-	
+
+	bool getKeyPressed(roj::Keycode key);
+	bool getMousePressed(roj::MouseButton key);
+	void enableCursor(bool state);
 }
 #endif // !INPUT_HPP
 

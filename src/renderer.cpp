@@ -14,6 +14,7 @@ void game::renderModel(std::vector<roj::Mesh>& model, roj::GLShaderObject& shade
         unsigned int specularNr = 1;
         unsigned int normalNr = 1;
         unsigned int heightNr = 1;
+        
         for (unsigned int i = 0; i < textures.size(); i++)
         {
             glActiveTexture(GL_TEXTURE0 + i);
@@ -30,7 +31,7 @@ void game::renderModel(std::vector<roj::Mesh>& model, roj::GLShaderObject& shade
             shader.uniform1i(uniformStr.c_str(), i);
             glBindTexture(GL_TEXTURE_2D, textures[i].id);
         }
-
+        
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
@@ -45,7 +46,7 @@ void game::renderModel(roj::SkinnedModel& model, roj::GLShaderObject& shader)
         auto& indices = mesh.indices;
         auto& vertices = mesh.vertices;
         uint32_t VAO = mesh.VAO;
-
+        
         unsigned int diffuseNr = 1;
         unsigned int specularNr = 1;
         unsigned int normalNr = 1;

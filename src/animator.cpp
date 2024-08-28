@@ -7,21 +7,21 @@ int roj::Animator::getKeyTransformIdx(std::vector<float>& timestamps)
     if (timestamps.size() < 2)
         return -1;
     
-    for (int index = 0; index < timestamps.size() - 2; ++index)
+    for (int index = 0; index < timestamps.size() - 1; ++index)
     {
         if (m_currTime < timestamps[index + 1])
             return index;
     }
-    
+
+    return timestamps.size() - 2;
 }
 
 float roj::Animator::getScaleFactor(float lastTimeStamp, float nextTimeStamp, float animationTime)
 {
-    float scaleFactor = 0.0f;
+    if (m_currTime < lastTimeStamp) return 0.f;
     float midWayLength = m_currTime - lastTimeStamp;
     float framesDiff = nextTimeStamp - lastTimeStamp;
-    scaleFactor = midWayLength / framesDiff;
-    return scaleFactor;
+    return midWayLength / framesDiff;
 }
 
 glm::mat4 roj::Animator::interpolatePosition(roj::BoneTransform& boneTransform)
@@ -125,13 +125,21 @@ std::vector<glm::mat4>& roj::Animator::getBoneMatrices()
 
 void roj::Animator::update(float dt)
 {
-    if (m_currAnim) {
-        m_currTime += m_currAnim->ticksPerSec * dt;
-        m_currTime = fmod(m_currTime, m_currAnim->duration);
+    if (m_currAnim && m_playing) {
+        m_playing  = (m_loopEnabled) ? true : (m_currTime < m_currAnim->duration);
+        m_currTime = m_currTime + (m_currAnim->ticksPerSec * dt);
         calcBoneTransform(m_currAnim->rootBone, glm::mat4(1.0f));
     }
 }
 
+void roj::Animator::play()
+{
+    m_playing = true;
+    m_currTime = 0.0f;
+}
 
 
-
+void roj::Animator::reset()
+{
+    m_currTime = 0.0f;
+}

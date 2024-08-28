@@ -1,5 +1,5 @@
 #include "camera.hpp"
-
+#include <iostream>
 void roj::Camera::update()
 {
     glm::vec3 front;
@@ -12,28 +12,10 @@ void roj::Camera::update()
     m_up = glm::normalize(glm::cross(m_right, m_front));
 }
 
-roj::Camera::Camera(glm::vec3 pos, glm::vec3 worldUp, float yaw, float pitch)
+roj::Camera::Camera(glm::vec3 worldUp, float yaw, float pitch)
 	: m_yaw(yaw), m_pitch(pitch)
-	, m_position(pos), m_worldUp(worldUp)
+	, m_worldUp(worldUp)
 	, m_front(glm::vec3(0.0f, 0.0f, -1.0f)) {update();}
-
-void roj::Camera::placeAt(glm::vec3 pos)
-{
-    m_position = pos;
-}
-
-void roj::Camera::move(Movement dir, float speed, float deltatime)
-{
-    float velocity = speed * deltatime;
-    if (dir == Movement::FORWARD)
-        m_position += m_front * velocity;
-    if (dir == Movement::BACKWARD)
-        m_position -= m_front * velocity;
-    if (dir == Movement::LEFT)
-        m_position -= m_right * velocity;
-    if (dir == Movement::RIGHT)
-        m_position += m_right * velocity;
-}
 
 void roj::Camera::rotate(float xoffset, float yoffset, float sensitivity, bool limitPitch)
 {
@@ -55,12 +37,27 @@ void roj::Camera::rotate(float xoffset, float yoffset, float sensitivity, bool l
     update();
 }
 
-glm::vec3 roj::Camera::getPosition()
+float roj::Camera::getYaw()
 {
-    return m_position;
+    return m_yaw;
 }
 
-glm::mat4 roj::Camera::getViewMatrix()
+float roj::Camera::getPitch()
 {
-    return glm::lookAt(m_position, m_position + m_front, m_up);
+    return m_pitch;
+}
+
+glm::vec3 roj::Camera::getFront()
+{
+    return m_front;
+}
+
+glm::vec3 roj::Camera::getRight()
+{
+    return m_right;
+}
+
+glm::mat4 roj::Camera::getViewMatrix(glm::vec3 pos)
+{
+    return glm::lookAt(pos, pos + m_front, m_up);
 }

@@ -1,27 +1,28 @@
 #include "world.hpp"
-void GameWorld::init()
+
+void GameWorld::initPhysx()
 {
-	for (auto& [_, scene] : m_scenes)
-	{
-		scene.binds.init(scene, m_resources);
-	}
+	m_physxHandle.foundation = PxCreateFoundation(PX_PHYSICS_VERSION, m_physxHandle.allocator, m_physxHandle.errorCallback);
+	m_physxHandle.physics = PxCreatePhysics(PX_PHYSICS_VERSION, *m_physxHandle.foundation, physx::PxTolerancesScale());
+	m_physxHandle.dispatcher = physx::PxDefaultCpuDispatcherCreate(1);
+}
+
+GameWorld::GameWorld() { initPhysx(); }
+GameWorld::~GameWorld()
+{
+	m_physxHandle.dispatcher->release();
+	m_physxHandle.physics->release();
+	m_physxHandle.foundation->release();
 }
 
 void GameWorld::update(float deltatime)
 {
-	m_scenes[m_activeScene].deltatime = deltatime;
-	m_scenes[m_activeScene].binds.update(m_scenes[m_activeScene]);
+	m_scenes[m_activeScene]->update(deltatime);
 }
 
 void GameWorld::render()
 {
-	m_scenes[m_activeScene].binds.render(m_scenes[m_activeScene], m_resources);
-}
-
-uint32_t GameWorld::addScene(roj::SceneBinds bindings)
-{
-	m_scenes[m_nextSceneId].binds = bindings;
-	return m_nextSceneId++;
+	m_scenes[m_activeScene]->render();
 }
 
 void GameWorld::removeScene(uint32_t id)
@@ -31,27 +32,22 @@ void GameWorld::removeScene(uint32_t id)
 
 void GameWorld::mouseCallback(roj::MouseButton button, roj::InputAction action)
 {
-	m_scenes[m_activeScene].binds.mouseCallback(m_scenes.at(m_activeScene), button, action);
+	m_scenes[m_activeScene]->mouseCallback(button, action);
 }
 
 void GameWorld::keyCallback(roj::Keycode key, roj::InputAction action)
 {
-	m_scenes[m_activeScene].binds.keyCallback(m_scenes.at(m_activeScene), key, action);
+	m_scenes[m_activeScene]->keyCallback(key, action);
 
 }
 
 void GameWorld::cursorCallback(double x, double y)
 {
-	m_scenes[m_activeScene].binds.cursorCallback(m_scenes.at(m_activeScene),x, y);
+	m_scenes[m_activeScene]->cursorCallback(x, y);
 
 }
 
 void GameWorld::setActiveScene(uint32_t scene)
 {
 	m_activeScene = scene;
-}
-
-roj::Scene& GameWorld::getActiveScene()
-{
-	return m_scenes.at(m_activeScene);
 }

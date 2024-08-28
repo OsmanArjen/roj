@@ -1,5 +1,7 @@
 #ifndef SCENE_HPP
 #define SCENE_HPP
+#include <PxPhysicsAPI.h>
+
 #include <entt/entt.hpp>
 #include "model.hpp"
 #include "skinned_model.hpp"
@@ -10,43 +12,42 @@
 #include "camera.hpp"
 #include <vector>
 
-struct LightData
+struct PhysxHandle
 {
-	glm::vec3 position;
-	float ambient;
-	float diffuse;
-	float specular;
+    physx::PxFoundation* foundation;
+    physx::PxPhysics* physics;
+    physx::PxDefaultCpuDispatcher* dispatcher;
+    physx::PxDefaultAllocator allocator;
+    physx::PxDefaultErrorCallback errorCallback;
 };
 
-struct GameResource
+struct ResourceHandle
 {
-	std::vector<std::vector<roj::Mesh>> models;
-	std::vector<roj::SkinnedModel> skinnedModels;
+    std::unordered_map<std::string, std::vector<roj::Mesh>> models;
+    std::unordered_map<std::string, roj::SkinnedModel> skinnedModels;
 	std::unordered_map<std::string, roj::GLShaderObject> shaderObjects;
 	std::unordered_map<std::string, uint32_t> textures;
 };
 
 namespace roj
 {
-	struct Scene;
-	struct SceneBinds
-	{
-		std::function<void(roj::Scene&, GameResource&)> init;
-		std::function<void(roj::Scene&, GameResource&)> render;
-		std::function<void(roj::Scene&)> update;
+    enum SceneFlags : std::uint32_t
+    {
+        DEFAULT = 0,
+        PHYSX_FLAG = 1 << 0,
+    };
 
-		std::function<void(roj::Scene&, roj::Keycode, roj::InputAction)> keyCallback;
-		std::function<void(roj::Scene&, roj::MouseButton, roj::InputAction)> mouseCallback;
-		std::function<void(roj::Scene&, float, float)> cursorCallback;
-	};
+    class AbstractScene
+    {
+    public:
+        virtual ~AbstractScene() = default;
 
-	struct Scene
-	{
-		float deltatime = 0.f;
-		roj::Camera camera;
-		entt::registry entities;
-		std::vector<LightData> lights;
-		SceneBinds binds;
-	};
+        virtual void update(float deltatime) = 0;
+        virtual void render() = 0;
+
+        virtual void keyCallback(roj::Keycode keycode, roj::InputAction action) = 0;
+        virtual void mouseCallback(roj::MouseButton button, roj::InputAction action) = 0;
+        virtual void cursorCallback(float xpos, float ypos) = 0;
+    };
 }
 #endif //-SCENE_HPP

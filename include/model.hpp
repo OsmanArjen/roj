@@ -99,6 +99,7 @@ template<typename mesh_t>
 std::vector<roj::MeshTexture> ModelLoader<mesh_t>::loadTextureMap(aiMaterial* mat, aiTextureType type)
 {
     std::vector<MeshTexture> textures;
+    
     for (uint32_t i = 0; i < mat->GetTextureCount(type); i++)
     {
         aiString texSrc;
@@ -119,7 +120,7 @@ std::vector<roj::MeshTexture> ModelLoader<mesh_t>::loadTextureMap(aiMaterial* ma
             m_texCache.emplace_back(utils::loadGLTexture(texPath), type, texSrc.C_Str());
         }
     }
-
+    
     return textures;
 }
 

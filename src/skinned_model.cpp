@@ -54,7 +54,7 @@ static void extractAnimations(const aiScene* scene, roj::SkinnedModel& model)
         aiAnimation* sceneAnim = scene->mAnimations[i];
         roj::Animation& animation = model.animations[sceneAnim->mName.C_Str()];
         extractBoneNode(animation.rootBone, scene->mRootNode);
-        animation.ticksPerSec = (sceneAnim->mTicksPerSecond != 0.0f) ? sceneAnim->mTicksPerSecond : 1.0f;
+        animation.ticksPerSec = sceneAnim->mTicksPerSecond;
         animation.duration = sceneAnim->mDuration;
 
         for (unsigned int i = 0; i < sceneAnim->mNumChannels; i++) {
@@ -75,6 +75,8 @@ static void extractAnimations(const aiScene* scene, roj::SkinnedModel& model)
                 track.scaleTimestamps.emplace_back(channel->mScalingKeys[j].mTime);
                 track.scales.push_back(toGlmVec3(channel->mScalingKeys[j].mValue));
             }
+            
+
         }
     }
 }
@@ -134,13 +136,14 @@ bool ModelLoader<SkinnedMesh>::load(const std::string& path)
     resetLoader();
     const aiScene* scene = m_import.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
     m_relativeDir = static_cast<std::filesystem::path>(path).parent_path().string();
-
+    
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
     {
         m_infoLog += m_import.GetErrorString();
         return false;
     }
-
+    m_model.globalInversed = glm::inverse(toGlmMat4(scene->mRootNode->mTransformation));
+    m_model.sceneCamera = (scene->HasCameras()) ? scene->mCameras[0] : nullptr;
     processNode(scene->mRootNode, scene);
     for (SkinnedMesh& mesh : m_model)
     {

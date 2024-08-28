@@ -1,0 +1,3 @@
+#ifndef SCENE_EDTIRO_HPP
+#define SCENE_EDITOR_HPP
+#endif // SCENE_EDITOR_HPP

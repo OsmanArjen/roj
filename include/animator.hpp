@@ -10,6 +10,8 @@ private:
     Animation* m_currAnim{nullptr};
     SkinnedModel* m_model;
     float m_currTime{0.0f};
+    bool m_playing = false;
+    bool m_loopEnabled = false;
 private:
     int getKeyTransformIdx(std::vector<float>& timestamps);
     float getScaleFactor(float lastTimeStamp, float nextTimeStamp, float animationTime);
@@ -18,15 +20,16 @@ private:
     glm::mat4 interpolateScaling(BoneTransform& boneTransform);
     void calcBoneTransform(BoneNode& node, glm::mat4 offset);
 public:
+    Animator() = default;
 	Animator(SkinnedModel& model);
+    void play();
+    void loop(bool enable);
     void set(const std::string& name);
     std::vector<std::string> get();
     std::vector<glm::mat4>& getBoneMatrices();
     void update(float dt);
-    void reset() {
-
-        std::cout << m_currTime << ':'<< m_currAnim->duration << '\n';        m_currTime = 0.0f;
-    }
+    void reset();
+    
 };
 }
 #endif //-ANIMATOR_HPP

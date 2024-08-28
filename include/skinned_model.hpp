@@ -63,6 +63,8 @@ namespace roj
 	struct SkinnedModel
 	{
 		int boneCount{ 0 };
+		aiCamera* sceneCamera;
+		glm::mat4 globalInversed;
 		std::vector<SkinnedMesh> meshes;
 		std::unordered_map<std::string, BoneInfo> boneInfoMap;
 		std::unordered_map<std::string, Animation> animations;

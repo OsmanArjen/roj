@@ -19,6 +19,7 @@ namespace roj
 		GLShaderObject();
 		std::string getInfoLog();
 		bool link(const std::string& vsPath, const std::string& fsPath);
+		bool link(const std::string& vsPath, const std::string& fsPath, const std::string& gsPath);
 		void uniform1i(const std::string& name, int value) const;
 		void uniform1f(const std::string& name, float value) const;
 		void uniform2f(const std::string& name, const glm::vec2& value) const;

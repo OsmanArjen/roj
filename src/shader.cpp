@@ -60,6 +60,29 @@ bool GLShaderObject::link(const std::string& vsPath, const std::string& fsPath)
    	return success;
 }
 
+bool GLShaderObject::link(const std::string& vsPath, const std::string& fsPath, const std::string& gsPath)
+{
+	unsigned int shader_vs{ createShader(GL_VERTEX_SHADER,   vsPath) };
+	unsigned int shader_fs{ createShader(GL_FRAGMENT_SHADER, fsPath) };
+	unsigned int shader_gs{ createShader(GL_GEOMETRY_SHADER, gsPath) };
+	if (!shader_vs || !shader_fs || !shader_gs)
+		return false;
+
+	glAttachShader(id, shader_vs);
+	glAttachShader(id, shader_fs);
+	glAttachShader(id, shader_gs);
+	glLinkProgram(id);
+
+	int success;
+	char log[1024];
+	glGetProgramiv(id, GL_LINK_STATUS, &success);
+	glGetProgramInfoLog(id, 1024, NULL, log);
+	if (!success)
+		infoLog += log;
+
+	return success;
+}
+
 //
 void roj::GLShaderObject::uniform1i(const std::string& name, int value) const
 {

@@ -4,9 +4,10 @@ AppHandle* AppHandle::s_instance = nullptr;
 void AppHandle::initWindow()
 {
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
     glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
     m_window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);
@@ -32,6 +33,7 @@ void AppHandle::initWindow()
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
+    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     IMGUI_CHECKVERSION();
@@ -43,6 +45,15 @@ void AppHandle::initWindow()
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(m_window, true);
     ImGui_ImplOpenGL3_Init("#version 330 core");
+    GLuint numExtensions;
+    glGetIntegerv(GL_NUM_EXTENSIONS, (GLint*)&numExtensions);
+
+    bool extensionSupported = false;
+    for (GLuint i = 0; i < numExtensions; ++i) {
+        const GLubyte* extension = glGetStringi(GL_EXTENSIONS, i);
+        std::cout << reinterpret_cast<const char*>(extension) << '\n';
+    }
+
 }
 
 AppHandle::AppHandle()

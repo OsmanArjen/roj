@@ -214,51 +214,69 @@ namespace {
     // indexNodes must visit nodes in the same order.
     // ---------------------------------------------------------------------------
 
-    size_t countNodes(const aiNode& node) {
-        size_t count = 1;
-        for (unsigned int i = 0; i < node.mNumChildren; i++)
-            count += countNodes(*node.mChildren[i]);
-        return count;
+        // ---------------------------------------------------------------------------
+    // Node tree
+    //
+    // Rows of ModelScene::nodes are in pre-order. Joints and animation channels refer to
+    // nodes by row, so the walk builds the table and the aiNode -> row map together.
+    // ---------------------------------------------------------------------------
+
+    roj::Transform decomposeLocal(const glm::mat4& local) {
+        roj::Transform transform{};
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(local, transform.scale, transform.rotation, transform.position, skew, perspective);
+        return transform;
     }
 
+    // The only function that knows every column, so they cannot get out of step.
+    uint32_t addNode(roj::NodeTable& nodes, std::string name, entt::id_type parent, const roj::Transform& local) {
+        const uint32_t row = static_cast<uint32_t>(nodes.names.size());
+        nodes.names.push_back(std::move(name));
+        nodes.parents.push_back(parent);
+        nodes.subtrees.push_back(1);              // a leaf until its children are added
+        nodes.locals.push_back(local);
+        nodes.meshes.push_back(entt::null);
+        nodes.materials.push_back(entt::null);
+        nodes.skinned.push_back(0);
+        return row;
+    }
 
-    void convertNode(roj::ModelScene& model, const aiNode& ainode, roj::ModelNode* parent, uint32_t& nextIndex) {
-        roj::ModelNode& node = model.nodes[nextIndex++];
+    // Material and skinning are properties of the mesh, so they are set together with it.
+    void setMesh(roj::NodeTable& nodes, uint32_t row, const aiScene& scene, uint32_t meshIndex) {
+        const aiMesh& aimesh = *scene.mMeshes[meshIndex];
+        nodes.meshes[row] = meshIndex;
+        nodes.materials[row] = aimesh.mMaterialIndex;
+        nodes.skinned[row] = aimesh.HasBones();
+    }
 
-        node.name = ainode.mName.C_Str();
-        node.local = toMat4(ainode.mTransformation);
-        node.parent = parent;
-        node.children.reserve(ainode.mNumChildren);
-        model.log += "MESH PER A NODE:  " + std::to_string(ainode.mNumMeshes) + " \n";
-        node.mesh = ainode.mNumMeshes > 0
-            ? ainode.mMeshes[0]
-            : entt::null;
+    void convertNode(roj::ModelScene& model, const aiScene& scene, const aiNode& ainode,
+        entt::id_type parent, NodeIndexMap& indices) {
+        roj::NodeTable& nodes = model.nodes;
 
-        for (unsigned int i = 0; i < ainode.mNumChildren; i++) {
-            node.children.push_back(&model.nodes[nextIndex]);
-            convertNode(model, *ainode.mChildren[i], &node, nextIndex);
+        const uint32_t row = addNode(nodes, ainode.mName.C_Str(), parent, decomposeLocal(toMat4(ainode.mTransformation)));
+        indices.emplace(&ainode, row);
+
+        // One mesh per row: the first rides on the node itself, any others become
+        // identity-transform leaves directly below it (still pre-order, still inside its subtree).
+        for (uint32_t m = 0; m < ainode.mNumMeshes; m++) {
+            const uint32_t meshRow = m == 0
+                ? row
+                : addNode(nodes, nodes.names[row] + "#" + std::to_string(m), row, decomposeLocal(glm::mat4(1.0f)));
+            setMesh(nodes, meshRow, scene, ainode.mMeshes[m]);
         }
+
+        for (unsigned int c = 0; c < ainode.mNumChildren; c++)
+            convertNode(model, scene, *ainode.mChildren[c], row, indices);
+
+        // Every row appended since entering this node belongs to its subtree.
+        nodes.subtrees[row] = static_cast<uint32_t>(nodes.names.size()) - row;
     }
 
-    void convertNodeTree(roj::ModelScene& model, const aiNode& root) {
-        model.nodes.resize(countNodes(root));
-        model.root = &model.nodes[0];
-
-        uint32_t nextIndex = 0;
-        convertNode(model, root, nullptr, nextIndex);
-    }
-
-    void indexNodes(const aiNode& node, NodeIndexMap& out, entt::id_type& nextIndex) {
-        out.emplace(&node, nextIndex++);
-        for (unsigned int i = 0; i < node.mNumChildren; i++)
-            indexNodes(*node.mChildren[i], out, nextIndex);
-    }
-
-    NodeIndexMap buildNodeIndex(const aiNode& root) {
-        NodeIndexMap index;
-        entt::id_type nextIndex = 0;
-        indexNodes(root, index, nextIndex);
-        return index;
+    NodeIndexMap convertNodeTree(roj::ModelScene& model, const aiScene& scene) {
+        NodeIndexMap indices;
+        convertNode(model, scene, *scene.mRootNode, entt::null, indices);
+        return indices;
     }
 
     // ---------------------------------------------------------------------------
@@ -404,12 +422,12 @@ namespace {
 
         aiString name;
         aimat.GetTexture(type, 0, &name);
-
-        const entt::id_type key = entt::hashed_string(name.C_Str());
-        if (const auto cached = model.textures.find(key); cached != model.textures.end())
-            return cached->second;
-
-        return roj::resourceLoad<std::shared_ptr<bimg::ImageContainer>>(reg, modelDir / name.C_Str());
+        auto strkey = model.path + ":" + name.C_Str();
+        const entt::id_type key = entt::hashed_string(strkey.c_str());
+        const auto cached = roj::resourceFind<std::shared_ptr<bimg::ImageContainer>>(reg, key);
+        if (cached != entt::null) return cached;
+        model.textures.emplace_back(key);
+        return roj::resourceLoad<std::shared_ptr<bimg::ImageContainer>>(reg, key, (modelDir / name.C_Str()));
     }
 
     roj::GfxPbrMaterial convertMaterial(roj::ModelScene& model, entt::registry& reg, const aiMaterial& aimat) {
@@ -423,6 +441,19 @@ namespace {
         material.normal = load(aiTextureType_NORMALS);
         material.metallicRoughness = load(aiTextureType_GLTF_METALLIC_ROUGHNESS);
         material.emissive = load(aiTextureType_EMISSIVE);
+		material.occlusion = load(aiTextureType_LIGHTMAP);
+        aiColor4D color;
+        if (aimat.Get(AI_MATKEY_BASE_COLOR, color) == AI_SUCCESS)
+            material.baseColor = { color.r, color.g, color.b, color.a };
+
+        aiColor3D emissive;
+        if (aimat.Get(AI_MATKEY_COLOR_EMISSIVE, emissive) == AI_SUCCESS)
+            material.emissiveFactor = { emissive.r, emissive.g, emissive.b };
+
+        aimat.Get(AI_MATKEY_METALLIC_FACTOR, material.metallicFactor);
+        aimat.Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughnessFactor);
+        
+
         return material;
     }
 
@@ -444,10 +475,10 @@ namespace {
 
     void loadEmbeddedTextures(roj::ModelScene& model, entt::registry& reg, const aiScene& scene) {
         for (uint32_t i = 0; i < scene.mNumTextures; i++) {
-            auto key = entt::hashed_string(("*" + std::to_string(i)).c_str());
-            auto e = roj::resourceLoad<std::shared_ptr<bimg::ImageContainer>>(reg, key, std::ref(*scene.mTextures[i]));
-            model.textures.emplace(key, e);
-
+            auto strkey = model.path + ":" + ("*" + std::to_string(i));
+            auto key = entt::hashed_string(strkey.c_str());
+            roj::resourceLoad<std::shared_ptr<bimg::ImageContainer>>(reg, key, std::ref(*scene.mTextures[i]));
+            model.textures.emplace_back(key);
         }
     }
 
@@ -456,44 +487,40 @@ namespace {
             model.materials[i] = convertMaterial(model, reg, *scene.mMaterials[i]);
     }
 
-    // A node renders with the material of its mesh.
-    void assignNodeMaterials(roj::ModelScene& model, const aiScene& scene) {
-        for (roj::ModelNode& node : model.nodes) {
-            if (node.mesh != entt::null) {
-                node.skinned = scene.mMeshes[node.mesh]->HasBones();
-                node.material = scene.mMeshes[node.mesh]->mMaterialIndex;
-            }
-        }
-    }
 
     // ---------------------------------------------------------------------------
     // Instantiation
     // ---------------------------------------------------------------------------
 
-    roj::Transform decomposeLocal(const glm::mat4& local) {
-        roj::Transform transform{};
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        glm::decompose(local, transform.scale, transform.rotation, transform.position, skew, perspective);
-        return transform;
-    }
 
+    std::vector<entt::entity> instantiateNodes(entt::registry& reg, const roj::ModelScene& model,
+        entt::entity rootEntity) {
+        const roj::NodeTable& nodes = model.nodes;
 
-    void instantiateNode(entt::registry& reg, const roj::ModelScene& model, const roj::ModelNode& node, entt::entity entity, entt::entity parentEntity, entt::entity rootEntity, std::vector<entt::entity>& nodeEntities) {
-        nodeEntities[static_cast<size_t>(&node - model.nodes.data())] = entity;
-        reg.emplace<roj::Transform>(entity, decomposeLocal(node.local));
-        roj::Transform::attach(reg, entity, parentEntity);
+        // Row 0 is the caller's entity; every other row gets a fresh one.
+        std::vector<entt::entity> nodeEntities(nodes.names.size());
+        nodeEntities[0] = rootEntity;
+        reg.create(nodeEntities.begin() + 1, nodeEntities.end());
 
-        if (node.mesh != entt::null) {
-            reg.emplace<roj::GfxMeshInstance>(entity, model.meshes[node.mesh]);
-            if (node.skinned)
-                reg.emplace<roj::SkinPalette>(entity, roj::SkinPalette{ rootEntity, std::vector<glm::mat4>(model.joints.size(), glm::mat4(1.0f)) });
-            if (node.material != entt::null)
-                reg.emplace<roj::GfxPbrMaterial>(entity, model.materials[node.material]);
+        // Parents precede children in the table, so attaching in row order always finds the parent in place.
+        for (size_t row = 0; row < nodes.names.size(); row++) {
+            const entt::entity entity = nodeEntities[row];
+            const entt::entity parentEntity = nodes.parents[row] == entt::null
+                ? entt::entity{ entt::null }
+            : nodeEntities[nodes.parents[row]];
+
+            reg.emplace<roj::Transform>(entity, decomposeLocal(nodes.locals[row]));
+            roj::Transform::attach(reg, entity, parentEntity);
+
+            if (nodes.meshes[row] != entt::null) {
+                reg.emplace<roj::GfxMeshInstance>(entity, model.meshes[nodes.meshes[row]]);
+                if (nodes.skinned[row])
+                    reg.emplace<roj::SkinPalette>(entity, roj::SkinPalette{ rootEntity, std::vector<glm::mat4>(model.joints.size(), glm::mat4(1.0f)) });
+                if (nodes.materials[row] != entt::null)
+                    reg.emplace<roj::GfxPbrMaterial>(entity, model.materials[nodes.materials[row]]);
+            }
         }
-
-        for (const roj::ModelNode* child : node.children)
-            instantiateNode(reg, model, *child, reg.create(), entity, rootEntity, nodeEntities);
+        return nodeEntities;
     }
 
 } // namespace
@@ -501,12 +528,11 @@ namespace {
 namespace roj {
 
     void instantiateModel(entt::handle root, const ModelScene& model) {
-        if (!model.root)
+        if (model.nodes.names.empty())
             return;
         entt::registry& reg = *root.registry();
 
-        std::vector<entt::entity> nodeEntities(model.nodes.size());
-        instantiateNode(reg, model, *model.root, root.entity(), entt::null, root.entity(), nodeEntities);
+        std::vector<entt::entity> nodeEntities = instantiateNodes(reg, model, root.entity());
 
         if (model.animations.empty() && model.joints.empty())
             return; // static models don't pay for a rig
@@ -533,21 +559,18 @@ namespace roj {
         const bool importFailed = !scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode;
         if (importFailed) {
             model.log += importer.GetErrorString();
-            model.root = nullptr;
             return model;
         }
 
         model.meshes.resize(scene->mNumMeshes);
         model.materials.resize(scene->mNumMaterials);
-        convertNodeTree(model, *scene->mRootNode);
-        const NodeIndexMap nodeIndices = buildNodeIndex(*scene->mRootNode);
+        const NodeIndexMap nodeIndices = convertNodeTree(model, *scene);
 
         loadMeshes(model, reg, *scene, nodeIndices);
         loadAnimations(model, reg, *scene, nodeIndices);
         loadEmbeddedTextures(model, reg, *scene);   // before materials, which look textures up by name
         loadMaterials(model, reg, *scene);
-        assignNodeMaterials(model, *scene);
-        roj::resourcesFlush(reg);
+        roj::resourcesFlush(reg);                   // assignNodeMaterials is gone
 
 
         return model;

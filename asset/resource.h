@@ -25,20 +25,12 @@ namespace roj {
     
     struct resource_id { entt::id_type value{}; };
 
-    
-    using resource_path = std::string_view;
-
-    
     template<class T>
     struct resource_job { std::future<std::optional<T>> result; };
 
     template<class T, class In>
     struct resource_loader { entt::delegate<std::optional<T>(const In&)> load; };
 
-    
-    constexpr resource_id resourceId(std::string_view path) {
-        return { entt::hashed_string::value(path.data(), path.size()) };
-    }
 
     namespace resource_detail {
 
@@ -53,11 +45,6 @@ namespace roj {
         
         inline void pendingInc(entt::registry& reg, entt::entity) { ++reg.ctx().get<pending>().jobs; }
         inline void pendingDec(entt::registry& reg, entt::entity) { --reg.ctx().get<pending>().jobs; }
-
-        template<class Arg>
-       concept is_path = std::is_convertible_v<std::decay_t<Arg>, std::string_view>;
-
-        
         
         template<class In>
         struct input {
@@ -65,15 +52,6 @@ namespace roj {
             using store = In;
             static const key& view(const store& s) { return s; }
         };
-
-        
-        template<is_path In>
-        struct input<In> {
-            using key = std::string_view;
-            using store = std::string;
-            static key view(const store& s) { return s; }
-        };
-
         
         template<class U>
         struct input<std::reference_wrapper<U>> {
@@ -154,8 +132,6 @@ namespace roj {
                 return it->second;
         return entt::null;
     }
-
-    
     
     
     template<class T, class Arg>
@@ -172,17 +148,10 @@ namespace roj {
     
     template<class T, class Arg>
     entt::entity resourceLoad(entt::registry& reg, Arg&& in) {
-        if constexpr (resource_detail::is_path<Arg>) {
-            return resourceLoad<T>(reg, resourceId(std::string_view{ in }), std::forward<Arg>(in));
-        }
-        else {
-            const auto e = reg.create();
-            resource_detail::spawn<T>(reg, e, std::forward<Arg>(in));
-            return e;
-        }
+        const auto e = reg.create();
+        resource_detail::spawn<T>(reg, e, std::forward<Arg>(in));
+        return e;   
     }
-
-    
     
     template<class T, class Arg>
     entt::entity resourceReload(entt::registry& reg, entt::entity e, Arg&& in) {
@@ -190,14 +159,6 @@ namespace roj {
         resource_detail::spawn<T>(reg, e, std::forward<Arg>(in));
         return e;
     }
-
-    
-    template<class T>
-    entt::entity resourceReload(entt::registry& reg, std::string_view path) {
-        const auto e = resourceFind<T>(reg, resourceId(path));
-        return e != entt::null ? resourceReload<T>(reg, e, path) : resourceLoad<T>(reg, path);
-    }
-
     
     template<class T>
     void resourceUnload(entt::registry& reg, entt::entity e) {
@@ -207,11 +168,6 @@ namespace roj {
                 if (auto it = lookup->entities.find(id->value); it != lookup->entities.end() && it->second == e)
                     lookup->entities.erase(it);
         reg.destroy(e);
-    }
-
-    template<class T>
-    void resourceUnload(entt::registry& reg, std::string_view path) {
-        resourceUnload<T>(reg, resourceFind<T>(reg, resourceId(path)));
     }
 
     

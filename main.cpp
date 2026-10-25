@@ -16,9 +16,14 @@
 #include <gfx/renderer.h>
 
 
-#include <asset/model.h>
+#include <asset/import.h>
+#include <asset/scene.h>
+#include <asset/resource.h>
+#include <asset/texture.h>
+
 #include <core/system.h>
 #include <entity/camera.h>
+#include <entity/tps_camera.h>
 #include <entity/transform.h>
 #include <entity/animation.h>
 #include <editor/scene.h>
@@ -39,7 +44,59 @@ static const roj::KeyBinding kAppBindings[] = {
     { SDL_SCANCODE_P, ActTogglePause },
 };
 
+
+
+std::string mapPath(int argc, char** argv) {
+    std::vector<std::string> args(argv + 1, argv + argc);
+    std::string map_name = "../../../assets/scene/level_blockout.glb"; // Default empty
+
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "--map" && i + 1 < args.size()) {
+            map_name = args[i + 1];
+            break; // Found it, we can stop looking
+        }
+    }
+    return map_name;
+}
+
+void onModelImport(entt::registry& reg, entt::entity asset) {
+    auto& asset_v = reg.get<roj::ModelAsset>(asset);
+    reg.emplace<roj::ModelScene>(asset, roj::loadModel(reg, asset_v));
+}
+
+void initResources(entt::registry& reg) {
+    reg.ctx().emplace<tf::Executor>(std::thread::hardware_concurrency());
+    roj::resourceType<std::shared_ptr<bimg::ImageContainer>, std::filesystem::path>(reg).connect<&roj::loadTextureFile>();
+    roj::resourceType<std::shared_ptr<bimg::ImageContainer>, roj::EmbeddedTexture>(reg).connect<&roj::readEmbeddedTexture>();
+    roj::resourceType<roj::ModelAsset, std::filesystem::path>(reg).connect<&roj::importModel>();
+    reg.on_construct<roj::ModelAsset>().connect<&onModelImport>();
+}
+// A target entity that is waiting for its model to finish loading.
+struct ModelRequest { entt::entity asset; };
+
+// Returns immediately. The model is instantiated into the returned entity once its ModelScene exists.
+entt::entity requestModel(entt::registry& reg, entt::entity asset) {
+    const entt::entity target = reg.create();
+    reg.emplace<ModelRequest>(target, asset);
+    return target;
+}
+
+// Call once per frame, after resourcesUpdate.
+void placeLoadedModels(entt::registry& reg) {
+    // Collect first, then mutate, the same way resource_detail::commit does.
+    std::vector<entt::entity> ready;
+    for (auto [target, req] : reg.view<ModelRequest>().each())
+        if (reg.all_of<roj::ModelScene>(req.asset)) ready.push_back(target);
+
+    for (const entt::entity target : ready) {
+        const auto& scene = reg.get<roj::ModelScene>(reg.get<ModelRequest>(target).asset);
+        std::cout << scene.log;
+        roj::instantiateModel(entt::handle{ reg, target }, scene);
+        reg.remove<ModelRequest>(target);
+    }
+}
 int main(int argc, char** argv) {
+    const std::string mapPathStr = mapPath(argc, argv);
 
 	roj::PlatformInit pinit;
 	roj::ClockInit cinit;
@@ -82,25 +139,54 @@ int main(int argc, char** argv) {
 
     roj::clockInit(clock, cinit);
 
-    const char* modelPath = "../../../assets/scene/starwars.glb";
-    roj::ModelScene mapScene = roj::loadModel(registry, modelPath);
-    entt::entity mapRoot = registry.create();
-    roj::instantiateModel(entt::handle{ registry, mapRoot }, mapScene);
-    //roj::animationPlay(registry, mapRoot, mapScene.animations[0]);
-
-
     roj::Camera camera;
-    roj::FlyController fly;
-    
+    roj::ThirdPersonController tps;
+    glm::vec3 knightPos{ 0.0f };
+    float knightYaw = 0.0f;                       // radians about +Y
+    const float knightSpeed = 4.0f;
+    const float modelYawOffset = 0.0f;            // glm::pi<float>() if the knight faces -Z
+
+    const char* romero = "../../../assets/scene/Solus_the_knight.gltf";
+
+    initResources(registry);
+    auto mapAsset_v = roj::resourceLoad<roj::ModelAsset>(registry, std::filesystem::path{ mapPathStr });
+    auto romeroAsset_v = roj::resourceLoad<roj::ModelAsset>(registry, std::filesystem::path{ romero });
+
+    requestModel(registry, mapAsset_v);
+    const entt::entity fpsModel = requestModel(registry, romeroAsset_v);
+
+    const auto fpsDefaultRotation = glm::quat(glm::radians(glm::vec3(1.0f, 187.0f, 1.0f)));
+    const auto fpsOffset = glm::vec3(0.100f, 0.0f, 0.120f);
+   
     roj::SceneEditor editor;
     while (!input.quit) {
         roj::clockTick(clock);
-		roj::platformPollEvents(platform, input, &ImGui_ImplSDL3_ProcessEvent);
-        roj::flyControllerUpdate(&fly, &camera, input, clock.dtReal);
+        roj::platformPollEvents(platform, input, &ImGui_ImplSDL3_ProcessEvent);
 
-		if (roj::inputPressed(&input, ActTogglePause)) {
-			roj::platformSetMouseCaptured(platform, !platform.mouseCaptured);
-		}
+        roj::resourcesUpdate(registry, std::chrono::steady_clock::now() + std::chrono::milliseconds(1));
+        placeLoadedModels(registry);      // freshly loaded scenes -> entities
+
+        const glm::vec3 dir = roj::thirdPersonMoveDirection(&camera, input);
+        knightPos += dir * knightSpeed * clock.dtReal;
+        knightYaw = roj::thirdPersonFacingYaw(knightYaw, dir, glm::radians(720.0f), clock.dtReal, modelYawOffset);
+
+        // Only touch the knight's entity once it has actually been instantiated.
+        if (!registry.all_of<ModelRequest>(fpsModel)) {
+            registry.patch<roj::Transform>(fpsModel, [&](roj::Transform& t) {
+                t.position = knightPos;
+                t.rotation = glm::vec3(0.0f, knightYaw, 0.0f);
+                });
+
+            const auto& clips = registry.get<roj::ModelScene>(romeroAsset_v).animations;
+            const bool moving = input.held & (roj::ActMoveForward | roj::ActMoveBack | roj::ActMoveLeft | roj::ActMoveRight);
+            roj::animationEnsure(registry, fpsModel, moving ? clips[5] : clips[15]);   // before animationUpdate
+        }
+
+        roj::thirdPersonUpdate(&tps, &camera, knightPos, input, clock.dtReal);   // after the knight moved
+
+        if (roj::inputPressed(&input, ActTogglePause))
+            roj::platformSetMouseCaptured(platform, !platform.mouseCaptured);
+
 
 		
         roj::animationUpdate(registry, clock.dt);   // writes local poses
@@ -113,7 +199,7 @@ int main(int argc, char** argv) {
 
         roj::draw_scene_editor(editor, registry);
         roj::draw_camera_fields(camera);
-        roj::draw_fly_controller_fields(fly);
+        //roj::draw_fly_controller_fields(fly);
 
         ImGui::Render();
         ImGui_Implbgfx_RenderDrawLists(ImGui::GetDrawData());
@@ -127,9 +213,6 @@ int main(int argc, char** argv) {
         roj::cameraViewMatrix(&camera, glm::value_ptr(view.view));
         roj::cameraProjMatrix(&camera, aspect, bgfx::getCaps()->homogeneousDepth, glm::value_ptr(view.projection));
         view.eye =  camera.position;
-
-
-        
 
         roj::gfxSubmit(renderer, registry);
     }

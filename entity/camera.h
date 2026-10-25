@@ -2,6 +2,7 @@
 #include <cmath>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <app/input.h>
 
@@ -9,10 +10,19 @@ namespace roj {
     // =========================================================================
     // [3] camera                                          >>> FILE: roj/camera.h
     // =========================================================================
+    //
+    // Conventions (match bx::mtxLookAt / bx::mtxProj, i.e. left-handed):
+    //   Y is up, +X is right, +Z is forward at yaw = pitch = 0.
+    //   yaw   > 0 turns right (toward +X)
+    //   pitch > 0 looks up
+    //
+    // cameraRotation() is the ONE place these conventions are encoded. Basis
+    // vectors, the view matrix and anything attached to the camera (the fps
+    // viewmodel) are all derived from it, so they can never disagree.
 
     // What is seen: pose + projection. Nothing about how it is driven.
     struct Camera {
-        glm::vec3 position{ 0.0f, 0.0f, -5.0f };
+        glm::vec3 position{ 0.0f, 0.0f, 0.0f };
         float yaw = 0.0f;      // degrees
         float pitch = 0.0f;      // degrees
         float fovY = 60.0f;     // degrees
@@ -32,22 +42,28 @@ namespace roj {
         float maxSpeed = 500.0f;
     };
 
-    inline glm::vec3 cameraForward(const Camera* c) {
-        const float yr = glm::radians(c->yaw);
-        const float pr = glm::radians(c->pitch);
-        return glm::normalize(glm::vec3(
-            std::sin(yr) * std::cos(pr),
-            std::sin(pr),
-            std::cos(yr) * std::cos(pr)
-        ));
+    // Camera orientation as a quaternion: yaw about +Y, then pitch about the
+    // camera's own X axis.
+    //
+    // NOTE the minus on pitch: angleAxis follows the right-hand rule, so a
+    // positive angle about +X rotates +Z *downward*. The camera defines
+    // positive pitch as "look up", hence the negation.
+    inline glm::quat cameraRotation(const Camera* c) {
+        const glm::quat qYaw = glm::angleAxis(glm::radians(c->yaw), glm::vec3(0.0f, 1.0f, 0.0f));
+        const glm::quat qPitch = glm::angleAxis(glm::radians(-c->pitch), glm::vec3(1.0f, 0.0f, 0.0f));
+        return qYaw * qPitch;
     }
 
-    inline glm::vec3 cameraRight(const Camera* c) {
-        return glm::normalize(glm::cross(glm::vec3(0, 1, 0), cameraForward(c)));
-    }
+    inline glm::vec3 cameraForward(const Camera* c) { return cameraRotation(c) * glm::vec3(0.0f, 0.0f, 1.0f); }
+    inline glm::vec3 cameraRight(const Camera* c) { return cameraRotation(c) * glm::vec3(1.0f, 0.0f, 0.0f); }
+    inline glm::vec3 cameraUp(const Camera* c) { return cameraRotation(c) * glm::vec3(0.0f, 1.0f, 0.0f); }
 
-    inline glm::vec3 cameraUp(const Camera* c) {
-        return glm::normalize(glm::cross(cameraForward(c), cameraRight(c)));
+    // Camera-space point -> world space. For things that ride on the camera:
+    //   t.position = cameraLocalToWorld(cam, { 0.25f, -0.2f, 0.5f });  // +Z = forward
+    //   t.rotation = cameraRotation(cam) * modelDefaultRotation;
+    // Run it AFTER the camera was updated this frame, or the model lags one frame.
+    inline glm::vec3 cameraLocalToWorld(const Camera* c, const glm::vec3& local) {
+        return c->position + cameraRotation(c) * local;
     }
 
     inline void cameraRotate(Camera* c, float yawDeltaDeg, float pitchDeltaDeg) {

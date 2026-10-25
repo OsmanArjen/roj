@@ -26,7 +26,7 @@
 namespace roj {
     namespace {
 
-        enum : uint8_t { kStageAlbedo = 0, kStageNormal, kStageMetalRough, kStageEmissive };
+        enum : uint8_t { kStageAlbedo = 0, kStageNormal, kStageMetalRough, kStageEmissive, kStageOcclusion };
 
         bgfx::TextureHandle createBgfxTexture(const std::shared_ptr<bimg::ImageContainer>& image) {
             if (!image)
@@ -137,13 +137,17 @@ namespace roj {
         r.u_normal = bgfx::createUniform("u_normal", bgfx::UniformType::Sampler);
         r.u_metallicroughness = bgfx::createUniform("u_metallicroughness", bgfx::UniformType::Sampler);
         r.u_emissive = bgfx::createUniform("u_emissive", bgfx::UniformType::Sampler);
+        r.u_occlusion = bgfx::createUniform("u_occlusion", bgfx::UniformType::Sampler);
         r.u_camPos = bgfx::createUniform("u_camPos", bgfx::UniformType::Vec4);
+        r.u_baseColorFactor = bgfx::createUniform("u_baseColorFactor", bgfx::UniformType::Vec4);
+        r.u_emissiveFactor = bgfx::createUniform("u_emissiveFactor", bgfx::UniformType::Vec4);
+        r.u_materialParams = bgfx::createUniform("u_materialParams", bgfx::UniformType::Vec4);
 
         r.fallbackAlbedo = gfxCreateSolidTexture(255, 255, 255, 255);  // x albedo = unchanged
         r.fallbackNormal = gfxCreateSolidTexture(128, 128, 255, 255);  // tangent-space (0,0,1)
         r.fallbackMetalRough = gfxCreateSolidTexture(255, 255, 0, 255);  // G=rough 1, B=metal 0
         r.fallbackEmissive = gfxCreateSolidTexture(0, 0, 0, 255);  // adds no light
-
+		r.fallbackOcclusion = gfxCreateSolidTexture(255, 255, 255, 255);  // adds no occlusion
         r.forwardView.id = 0;
         r.forwardView.name = "forward";
         r.forwardState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z
@@ -189,6 +193,13 @@ namespace roj {
                 resolveTexture(registry, material.metallicRoughness, r.fallbackMetalRough));
             bgfx::setTexture(kStageEmissive, r.u_emissive,
                 resolveTexture(registry, material.emissive, r.fallbackEmissive));
+            bgfx::setTexture(kStageOcclusion, r.u_occlusion,
+                resolveTexture(registry, material.occlusion, r.fallbackOcclusion));
+
+			glm::vec4 materialParams(material.metallicFactor, material.roughnessFactor, material.normalScale, material.occlusionStrength);
+            bgfx::setUniform(r.u_baseColorFactor, glm::value_ptr(material.baseColor));
+            bgfx::setUniform(r.u_emissiveFactor, glm::value_ptr(material.emissiveFactor));
+            bgfx::setUniform(r.u_materialParams, glm::value_ptr(materialParams));
 
             const SkinPalette* skin = registry.try_get<SkinPalette>(entity);
             const bool skinned = skin && !skin->matrices.empty();

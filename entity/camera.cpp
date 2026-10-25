@@ -10,7 +10,7 @@
 
 namespace roj {
 
-    void flyControllerUpdate(FlyController* fc, Camera* cam,  const Input& in, float dt) {
+    void flyControllerUpdate(FlyController* fc, Camera* cam, const Input& in, float dt) {
         if (!in.mouseCaptured)
             return;
 
@@ -20,9 +20,11 @@ namespace roj {
             fc->moveSpeed = glm::clamp(fc->moveSpeed * std::pow(fc->wheelStep, in.wheel),
                 fc->minSpeed, fc->maxSpeed);
 
-        const glm::vec3 fwd = cameraForward(cam);
-        const glm::vec3 rgt = cameraRight(cam);
-        const glm::vec3 up(0.0f, 1.0f, 0.0f);
+        // Build the rotation once, after this frame's look input was applied.
+        const glm::quat rot = cameraRotation(cam);
+        const glm::vec3 fwd = rot * glm::vec3(0.0f, 0.0f, 1.0f);
+        const glm::vec3 rgt = rot * glm::vec3(1.0f, 0.0f, 0.0f);
+        const glm::vec3 up(0.0f, 1.0f, 0.0f);   // world up for vertical movement
 
         glm::vec3 delta{ 0.0f };
         if (in.held & ActMoveForward) delta += fwd;
@@ -39,9 +41,10 @@ namespace roj {
     }
 
     void cameraViewMatrix(const Camera* c, float* out16) {
+        const glm::quat rot = cameraRotation(c);
         const glm::vec3 eye = c->position;
-        const glm::vec3 at = eye + cameraForward(c);
-        const glm::vec3 up = cameraUp(c);
+        const glm::vec3 at = eye + rot * glm::vec3(0.0f, 0.0f, 1.0f);
+        const glm::vec3 up = rot * glm::vec3(0.0f, 1.0f, 0.0f);
         bx::mtxLookAt(out16, { eye.x, eye.y, eye.z }, { at.x, at.y, at.z }, { up.x, up.y, up.z });
     }
 

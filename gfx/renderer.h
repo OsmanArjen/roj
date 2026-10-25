@@ -42,13 +42,18 @@ namespace roj {
         bgfx::UniformHandle u_normal = BGFX_INVALID_HANDLE;
         bgfx::UniformHandle u_metallicroughness = BGFX_INVALID_HANDLE;
         bgfx::UniformHandle u_emissive = BGFX_INVALID_HANDLE;
+        bgfx::UniformHandle u_occlusion = BGFX_INVALID_HANDLE;
         bgfx::UniformHandle u_camPos = BGFX_INVALID_HANDLE;
 		bgfx::UniformHandle u_joints = BGFX_INVALID_HANDLE;
+        bgfx::UniformHandle u_baseColorFactor = BGFX_INVALID_HANDLE;
+        bgfx::UniformHandle u_emissiveFactor = BGFX_INVALID_HANDLE;
+        bgfx::UniformHandle u_materialParams = BGFX_INVALID_HANDLE;
 
         bgfx::TextureHandle fallbackAlbedo = BGFX_INVALID_HANDLE;
         bgfx::TextureHandle fallbackNormal = BGFX_INVALID_HANDLE;
         bgfx::TextureHandle fallbackMetalRough = BGFX_INVALID_HANDLE;
         bgfx::TextureHandle fallbackEmissive = BGFX_INVALID_HANDLE;
+		bgfx::TextureHandle fallbackOcclusion = BGFX_INVALID_HANDLE;
 
         uint64_t forwardState = 0;
     };

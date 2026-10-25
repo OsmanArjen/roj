@@ -89,6 +89,11 @@ namespace {
         return global ? glm::mat4(*global) : glm::mat4(1.0f);
     }
 
+    template <typename Registry>
+    auto* playerOf(Registry& reg, entt::entity rigEntity) {
+        return reg.valid(rigEntity) ? reg.template try_get<roj::AnimationPlayer>(rigEntity) : nullptr;
+    }
+
 } // namespace
 
 namespace roj {
@@ -117,6 +122,110 @@ namespace roj {
         player.time = 0.0f;
         player.loop = loop;
         player.playing = true;
+    }
+
+    entt::entity animationFindClip(const entt::registry& reg, std::string_view name) {
+        for (const auto [entity, clip] : reg.view<const AnimationClip>().each())
+            if (clip.name == name)
+                return entity;
+        return entt::null;
+    }
+
+    bool animationPlay(entt::registry& reg, entt::entity rigEntity, entt::entity clip, const AnimationPlayDesc& desc) {
+        if (!reg.valid(rigEntity) || !reg.all_of<Rig>(rigEntity) || !reg.valid(clip))
+            return false;
+        const AnimationClip* data = reg.try_get<AnimationClip>(clip);
+        if (!data)
+            return false;
+
+        animationPlay(reg, rigEntity, clip, desc.loop);   // rest pose, time = 0, playing = true
+        AnimationPlayer& player = reg.get<AnimationPlayer>(rigEntity);
+        player.speed = desc.speed;                        // the original leaves speed as the previous clip had it
+        player.time = std::clamp(desc.phase, 0.0f, 1.0f) * data->duration;
+        return true;
+    }
+
+    bool animationPlay(entt::registry& reg, entt::entity rigEntity, std::string_view clipName, const AnimationPlayDesc& desc) {
+        return animationPlay(reg, rigEntity, animationFindClip(reg, clipName), desc);
+    }
+
+    // "This is the clip that should be playing": a no-op if it already is, even if it has finished.
+    bool animationEnsure(entt::registry& reg, entt::entity rigEntity, entt::entity clip, const AnimationPlayDesc& desc) {
+        const AnimationPlayer* player = playerOf(reg, rigEntity);
+        if (player && player->clip == clip)
+            return true;
+        return animationPlay(reg, rigEntity, clip, desc);
+    }
+
+    // Back to the rest pose with nothing playing. Pause, by contrast, freezes the pose where it is.
+    void animationStop(entt::registry& reg, entt::entity rigEntity) {
+        AnimationPlayer* player = playerOf(reg, rigEntity);
+        const Rig* rig = player ? reg.try_get<Rig>(rigEntity) : nullptr;
+        if (!rig)
+            return;
+        *player = AnimationPlayer{};
+        restoreRestPose(reg, *rig);
+    }
+
+    void animationPause(entt::registry& reg, entt::entity rigEntity) {
+        if (AnimationPlayer* player = playerOf(reg, rigEntity))
+            player->playing = false;
+    }
+
+    // Continues from where it paused. It does not replay a finished one-shot; that is animationPlay's job.
+    void animationResume(entt::registry& reg, entt::entity rigEntity) {
+        AnimationPlayer* player = playerOf(reg, rigEntity);
+        if (player && reg.valid(player->clip))
+            player->playing = true;
+    }
+
+    void animationSetSpeed(entt::registry& reg, entt::entity rigEntity, float speed) {
+        if (AnimationPlayer* player = playerOf(reg, rigEntity))
+            player->speed = speed;
+    }
+
+    // Applies the pose immediately, because animationUpdate skips paused players (needed for timeline scrubbing).
+    void animationSeek(entt::registry& reg, entt::entity rigEntity, float phase) {
+        AnimationPlayer* player = playerOf(reg, rigEntity);
+        if (!player || !reg.valid(player->clip))
+            return;
+        const AnimationClip* clip = reg.try_get<AnimationClip>(player->clip);
+        const Rig* rig = reg.try_get<Rig>(rigEntity);
+        if (!clip || !rig)
+            return;
+
+        player->time = std::clamp(phase, 0.0f, 1.0f) * clip->duration;
+        for (const AnimationChannel& channel : clip->channels)
+            applyChannel(reg, *rig, channel, player->time);
+    }
+
+    entt::entity animationCurrent(const entt::registry& reg, entt::entity rigEntity) {
+        const AnimationPlayer* player = playerOf(reg, rigEntity);
+        if (!player)
+            return entt::null;
+        return player->clip;
+    }
+
+    bool animationIsPlaying(const entt::registry& reg, entt::entity rigEntity) {
+        const AnimationPlayer* player = playerOf(reg, rigEntity);
+        return player && player->playing;
+    }
+
+    // A non-looping clip that ran to the end in the direction it was travelling.
+    bool animationFinished(const entt::registry& reg, entt::entity rigEntity) {
+        const AnimationPlayer* player = playerOf(reg, rigEntity);
+        if (!player || player->playing || player->loop || !reg.valid(player->clip))
+            return false;
+        const AnimationClip* clip = reg.try_get<AnimationClip>(player->clip);
+        return clip && (player->speed >= 0.0f ? player->time >= clip->duration : player->time <= 0.0f);
+    }
+
+    float animationPhase(const entt::registry& reg, entt::entity rigEntity) {
+        const AnimationPlayer* player = playerOf(reg, rigEntity);
+        if (!player || !reg.valid(player->clip))
+            return 0.0f;
+        const AnimationClip* clip = reg.try_get<AnimationClip>(player->clip);
+        return clip && clip->duration > 0.0f ? player->time / clip->duration : 0.0f;
     }
 
     void animationUpdate(entt::registry& reg, float dt) {

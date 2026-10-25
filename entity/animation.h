@@ -53,6 +53,11 @@ namespace roj {
         bool playing = false;
     };
 
+    struct AnimationPlayDesc {
+        bool  loop = true;
+        float speed = 1.0f;   
+        float phase = 0.0f;   
+    };
 
     struct SkinPalette {
         entt::entity rig = entt::null;      
@@ -61,7 +66,25 @@ namespace roj {
 
 
     Rig makeRig(const entt::registry& reg, std::vector<entt::entity> nodes, std::vector<RigJoint> joints);
+
+
+    entt::entity animationFindClip(const entt::registry& reg, std::string_view name);
     void animationPlay(entt::registry& reg, entt::entity rigEntity, entt::entity clip, bool loop = true);
+    bool animationPlay(entt::registry& reg, entt::entity rigEntity, entt::entity clip, const AnimationPlayDesc& desc);
+    bool animationPlay(entt::registry& reg, entt::entity rigEntity, std::string_view clipName, const AnimationPlayDesc& desc = {});
+    bool animationEnsure(entt::registry& reg, entt::entity rigEntity, entt::entity clip, const AnimationPlayDesc& desc = {});
+    void animationStop(entt::registry& reg, entt::entity rigEntity);
+
+    void animationPause(entt::registry& reg, entt::entity rigEntity);
+    void animationResume(entt::registry& reg, entt::entity rigEntity);
+    void animationSetSpeed(entt::registry& reg, entt::entity rigEntity, float speed);
+    void animationSeek(entt::registry& reg, entt::entity rigEntity, float phase);
+
+    entt::entity animationCurrent(const entt::registry& reg, entt::entity rigEntity);
+    bool  animationIsPlaying(const entt::registry& reg, entt::entity rigEntity);
+    bool  animationFinished(const entt::registry& reg, entt::entity rigEntity);
+    float animationPhase(const entt::registry& reg, entt::entity rigEntity);
+
     void animationUpdate(entt::registry& reg, float dt);
     void skinUpdate(entt::registry& reg);
 }
